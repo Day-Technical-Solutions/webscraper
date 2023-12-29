@@ -1,11 +1,19 @@
 {
   "name": "webscraper",
+  "type": "module",
   "version": "1.0.0",
   "description": "web scraper",
   "main": "server.ts",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "test.ts",
+    "dev": "npx tsx --watch ./server.ts" 
   },
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "dependencies": {
+    "http": "^0.0.1-security"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.5"
+  }
 }
