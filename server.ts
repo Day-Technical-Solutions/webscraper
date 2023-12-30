@@ -8,21 +8,18 @@ app.onGET("/", (req, res) => {
 	res.write("Connected! Successfully got /");
 	res.end();
 });
-app.onGET("/curl_reddit", async (req, res) => {
-	https
-		.get("https://www.reddit.com/", (redditResponse) => {
-			let data = "";
-			redditResponse.on("data", (chunk) => {
-				data += chunk;
-			});
-			redditResponse.on("end", () => {
-				res.writeHead(200, { "Content-type": "text/html" });
-				res.end(data);
-			});
-		})
-		.on("error", (error) => {
-			res.writeHead(500);
-			res.end(`Error fetching data: ${error.message}`);
-		});
+app.onGET("/api/get_reddit_access", async (req, res) => {
+	const clientAuth = {
+		username: process.env.REDDIT_ID,
+		password: process.env.REDDIT_SECRET,
+	};
+
+	const postData = "";
+
+	const headers = {
+		"User-Agent": "AutoPollClient/v1 by u/McBizkit",
+		"Content-Type": "application/x-www-form-urlencoded",
+		"Content-Length": Buffer.byteLength(postData),
+	};
 });
 app.start(8080);
