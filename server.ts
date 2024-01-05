@@ -10,9 +10,22 @@ const app = new QuickServer();
 const authTokens = {
 	REDDIT: {
 		token: null,
+		after: "",
 		expiration: "",
 		requestTime: 0,
 	},
+};
+const getQuery = (subreddit: string, limit: number, listing: string) => {
+	return (
+		"https://oauth.reddit.com/r/" +
+		subreddit +
+		"/" +
+		listing +
+		"/?after=" +
+		authTokens.REDDIT.after +
+		"&limit=" +
+		limit
+	);
 };
 app.onGET("/", (req, res) => {
 	res.writeHead(200, { "Content-type": "text/html" });
@@ -164,7 +177,7 @@ app.onGET("/api/get_subreddit_posts", async (req, res) => {
 	if (!authTokens.REDDIT.token) throw Error("No Access Token");
 	res.writeHead(200, { "Content-type": "application/json" });
 	const redditFetch = await axios
-		.get("https://oauth.reddit.com/r/popular/hot", {
+		.get(getQuery("AmItheAsshole", 100, "hot"), {
 			headers: {
 				"User-Agent": "AutoPollClient/v1 by u/McBizkit",
 				Authorization: `bearer ${authTokens.REDDIT.token}`,
@@ -172,7 +185,14 @@ app.onGET("/api/get_subreddit_posts", async (req, res) => {
 		})
 		.then((response) => {
 			console.log(response.data.data.children);
-			res.write(JSON.stringify(response.data.data));
+			authTokens.REDDIT.after = response.data.data.after;
+			const dataPack: Array<any> = response.data.data.children;
+			const formattedData = dataPack.map((obj) => {
+				const json = obj;
+				const { subreddit, title, selftext } = json.data;
+				return { subreddit, title, selftext };
+			});
+			res.write(JSON.stringify(formattedData));
 		})
 		.catch((error) => {
 			throw Error(`Error fetching data: ${error.message}`);
