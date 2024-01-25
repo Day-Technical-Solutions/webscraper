@@ -176,8 +176,9 @@ app.onGET("/api/test_access_token", async (req, res) => {
 app.onGET("/api/get_subreddit_posts", async (req, res) => {
 	if (!authTokens.REDDIT.token) throw Error("No Access Token");
 	res.writeHead(200, { "Content-type": "application/json" });
+	const data = { subreddit: null, url: null, title: null, selftext: null, processed: false };
 	const redditFetch = await axios
-		.get(getQuery("AmItheAsshole", 100, "hot"), {
+		.get(getQuery("AmItheAsshole", 1, "hot"), {
 			headers: {
 				"User-Agent": "AutoPollClient/v1 by u/McBizkit",
 				Authorization: `bearer ${authTokens.REDDIT.token}`,
@@ -189,14 +190,34 @@ app.onGET("/api/get_subreddit_posts", async (req, res) => {
 			const dataPack: Array<any> = response.data.data.children;
 			const formattedData = dataPack.map((obj) => {
 				const json = obj;
-				const { subreddit, title, selftext } = json.data;
-				return { subreddit, title, selftext };
+				const { subreddit, title, selftext, url } = json.data;
+				data.subreddit = subreddit;
+				data.title = title;
+				data.selftext = selftext;
+				data.url = url;
+				return data;
 			});
 			res.write(JSON.stringify(formattedData));
 		})
 		.catch((error) => {
 			throw Error(`Error fetching data: ${error.message}`);
 		});
+	try {
+		//send to dbserver
+		const dbpost = await axios
+			.post("http://127.0.0.1:8000/posts/create/", data, {
+				headers: {
+					"Content-Type": "application/json",
+				},
+			})
+			.then((res) => {
+				console.log(res);
+				console.log("Successfully sent post to dbserver");
+			})
+			.catch((error) => console.log(error));
+	} catch (error) {
+		throw Error(`Error sending data to db: ${error.message}`);
+	}
 
 	res.end();
 });
