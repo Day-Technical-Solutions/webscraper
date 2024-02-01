@@ -4,29 +4,30 @@ import https from "https";
 import QuickServer from "./QuickServer";
 import axios from "axios";
 import dotenv from "dotenv";
+import fetchRedditPost from "./utils/fetchRedditPost";
+import sendToDB from "./utils/sendToDB";
+import { RedditPost } from "./types";
+import { count } from "console";
 dotenv.config();
 
 const app = new QuickServer();
-const authTokens = {
+export const authTokens = {
 	REDDIT: {
-		token: null,
-		after: "",
+		token: "",
+		subreddits: [
+			"todayilearned",
+			"relationships",
+			"nosleep",
+			"AmItheAsshole",
+			"MaliciousCompliance",
+			"AITAH",
+		],
+		afterMap: ["", "", "", "", "", ""],
 		expiration: "",
 		requestTime: 0,
 	},
 };
-const getQuery = (subreddit: string, limit: number, listing: string) => {
-	return (
-		"https://oauth.reddit.com/r/" +
-		subreddit +
-		"/" +
-		listing +
-		"/?after=" +
-		authTokens.REDDIT.after +
-		"&limit=" +
-		limit
-	);
-};
+
 app.onGET("/", (req, res) => {
 	res.writeHead(200, { "Content-type": "text/html" });
 	res.write("Connected! Successfully got /");
@@ -174,50 +175,50 @@ app.onGET("/api/test_access_token", async (req, res) => {
 });
 
 app.onGET("/api/get_subreddit_posts", async (req, res) => {
+	let counter = 6;
+	let subredditID = counter % authTokens.REDDIT.subreddits.length;
 	if (!authTokens.REDDIT.token) throw Error("No Access Token");
 	res.writeHead(200, { "Content-type": "application/json" });
-	const data = { subreddit: null, url: null, title: null, selftext: null, processed: false };
-	const redditFetch = await axios
-		.get(getQuery("AmItheAsshole", 1, "hot"), {
-			headers: {
-				"User-Agent": "AutoPollClient/v1 by u/McBizkit",
-				Authorization: `bearer ${authTokens.REDDIT.token}`,
-			},
-		})
-		.then((response) => {
-			console.log(response.data.data.children);
-			authTokens.REDDIT.after = response.data.data.after;
-			const dataPack: Array<any> = response.data.data.children;
-			const formattedData = dataPack.map((obj) => {
-				const json = obj;
-				const { subreddit, title, selftext, url } = json.data;
-				data.subreddit = subreddit;
-				data.title = title;
-				data.selftext = selftext;
-				data.url = url;
-				return data;
-			});
-			res.write(JSON.stringify(formattedData));
-		})
-		.catch((error) => {
-			throw Error(`Error fetching data: ${error.message}`);
-		});
-	try {
-		//send to dbserver
-		const dbpost = await axios
-			.post("http://127.0.0.1:8000/posts/create/", data, {
-				headers: {
-					"Content-Type": "application/json",
-				},
-			})
-			.then((res) => {
-				console.log(res);
-				console.log("Successfully sent post to dbserver");
-			})
-			.catch((error) => console.log(error));
-	} catch (error) {
-		throw Error(`Error sending data to db: ${error.message}`);
-	}
+	const data: RedditPost = {
+		subreddit: "",
+		url: "",
+		title: "",
+		selftext: "",
+		processed: false,
+	};
+	const intervalId = setInterval(
+		async () =>
+			await fetchRedditPost(
+				authTokens.REDDIT.subreddits[subredditID],
+				authTokens.REDDIT.token,
+				authTokens.REDDIT.afterMap[subredditID]
+			)
+				.then((response) => {
+					console.log(response.data.data.children);
+					authTokens.REDDIT.afterMap[subredditID] = response.data.data.after;
+					const dataPack: Array<any> = response.data.data.children;
+					const formattedData = dataPack.map((obj) => {
+						const json = obj;
+						const { subreddit, title, selftext, url } = json.data;
+						data.subreddit = subreddit;
+						data.title = title;
+						data.selftext = selftext;
+						data.url = url;
+						return data;
+					});
+					counter++;
+					subredditID = counter % authTokens.REDDIT.subreddits.length;
+					res.write(JSON.stringify(formattedData));
+				})
+				.catch((error) => {
+					throw Error(`Error formatting data: ${error.message}`);
+				})
+				.then(async (response) => await sendToDB(data))
+				.catch((error) => {
+					throw Error(`Error sending data to db: ${error.message}`);
+				}),
+		10000
+	);
 
 	res.end();
 });
